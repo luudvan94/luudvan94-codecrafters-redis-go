@@ -1,42 +1,50 @@
 package main
 
 import (
-	"bufio"
+	"bytes"
 	"fmt"
 	"io"
-	"strings"
 
 	// Uncomment this block to pass the first stage
 	"net"
 	"os"
+
+	"github.com/tidwall/resp"
 )
 
 func handleConnection(conn net.Conn) {
 	defer conn.Close()
 
-	reader := bufio.NewReader(conn)
+	rd := resp.NewReader(conn)
+	var buf bytes.Buffer
+	wr := resp.NewWriter(&buf)
+
 	for {
-		input, err := reader.ReadString('\n')
+		v, _, err := rd.ReadValue()
+		if err == io.EOF {
+			break
+		}
 		if err != nil {
-			if err == io.EOF {
-				fmt.Println("Connection failed: ", err)
-				break
-			}
-			fmt.Println("Error reading data")
+			fmt.Println("Error reading data: ", err)
 			os.Exit(1)
 		}
-
-		fmt.Println("Input: ", input)
-		if strings.EqualFold(input, "PING\r\n") {
-			response := "+PONG\r\n"
-			_, err = conn.Write([]byte(response))
-			if err != nil {
-				fmt.Println("Error writing data: ", err)
-				os.Exit(1)
+		fmt.Printf("Read %s\n", v.Type())
+		if v.Type() == resp.SimpleString {
+			switch v.String() {
+			case "PING":
+				wr.WriteSimpleString("PONG")
+				conn.Write(buf.Bytes())
+			default:
+				fmt.Printf("Unknown command: %s\n", v)
 			}
-			fmt.Println("Response: ", response)
-		} else {
-			fmt.Println("Unknown command: ", input)
+		}
+		if v.Type() == resp.Array && len(v.Array()) >= 2 {
+			command := v.Array()[0]
+			value := v.Array()[1]
+			switch command.String() {
+			case "ECHO":
+				conn.Write(value.Bytes())
+			}
 		}
 	}
 }
