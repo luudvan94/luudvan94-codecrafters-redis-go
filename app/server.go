@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strings"
 
 	// Uncomment this block to pass the first stage
 	"net"
@@ -31,9 +32,8 @@ func handleConnection(conn net.Conn) {
 		fmt.Printf("Read %s %d\n", v.Type(), len(v.Array()))
 		if v.Type() == resp.Array && len(v.Array()) > 0 {
 			command := v.Array()[0]
-			fmt.Printf("%s\n", command.String())
-			switch command.String() {
-			case "ECHO":
+			switch strings.ToLower(command.String()) {
+			case "echo":
 				if len(v.Array()) < 2 {
 					fmt.Println("Missing value argument: ", v.String())
 					os.Exit(1)
@@ -41,9 +41,10 @@ func handleConnection(conn net.Conn) {
 
 				value := v.Array()[1]
 				conn.Write(value.Bytes())
-			case "PING":
+			case "ping":
 				wr.WriteSimpleString("PONG")
 				conn.Write(buf.Bytes())
+				buf.Reset()
 			}
 		}
 	}
