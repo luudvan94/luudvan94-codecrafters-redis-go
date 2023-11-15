@@ -40,13 +40,15 @@ func handleConnection(conn net.Conn) {
 				}
 
 				value := v.Array()[1]
-				conn.Write(value.Bytes())
+				wr.WriteString(value.String())
+				conn.Write(buf.Bytes())
 			case "ping":
 				wr.WriteSimpleString("PONG")
 				conn.Write(buf.Bytes())
-				buf.Reset()
 			}
 		}
+
+		buf.Reset()
 	}
 }
 
