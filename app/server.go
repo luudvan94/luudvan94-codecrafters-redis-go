@@ -1,10 +1,11 @@
 package main
 
 import (
-	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 
 	// Uncomment this block to pass the first stage
 	"net"
@@ -13,15 +14,42 @@ import (
 	"github.com/tidwall/resp"
 )
 
-func handleConnection(conn net.Conn) {
+type Connection struct {
+	*resp.Reader
+	*resp.Writer
+	base net.Conn
+}
+
+type Server struct {
+	mu  sync.RWMutex
+	kvs map[string]resp.Value
+}
+
+func NewServer() *Server {
+	return &Server{kvs: make(map[string]resp.Value)}
+}
+
+func NewConnection(conn net.Conn) *Connection {
+	return &Connection{
+		Reader: resp.NewReader(conn),
+		Writer: resp.NewWriter(conn),
+		base:   conn,
+	}
+}
+
+func (conn *Connection) Close() {
+	conn.base.Close()
+}
+
+func (server *Server) HandleConnection(conn *Connection) {
 	defer conn.Close()
 
-	rd := resp.NewReader(conn)
-	var buf bytes.Buffer
-	wr := resp.NewWriter(&buf)
+	// rd := resp.NewReader(conn)
+	// var buf bytes.Buffer
+	// wr := resp.NewWriter(&buf)
 
 	for {
-		v, _, err := rd.ReadValue()
+		v, _, _, err := conn.ReadMultiBulk()
 		if err == io.EOF {
 			break
 		}
@@ -29,31 +57,51 @@ func handleConnection(conn net.Conn) {
 			fmt.Println("Error reading data: ", err)
 			os.Exit(1)
 		}
+
 		fmt.Printf("Read %s %d\n", v.Type(), len(v.Array()))
 		if v.Type() == resp.Array && len(v.Array()) > 0 {
-			command := v.Array()[0]
+			values := v.Array()
+			command := values[0]
 			switch strings.ToLower(command.String()) {
 			case "echo":
-				if len(v.Array()) < 2 {
-					fmt.Println("Missing value argument: ", v.String())
-					os.Exit(1)
+				if err := conn.WriteString(values[1].String()); err != nil {
+					fmt.Println(err)
 				}
-
-				value := v.Array()[1]
-				wr.WriteString(value.String())
-				conn.Write(buf.Bytes())
+				continue
 			case "ping":
-				wr.WriteSimpleString("PONG")
-				conn.Write(buf.Bytes())
+				conn.WriteSimpleString("PONG")
+				continue
+			case "set":
+				if len(values) != 3 {
+					conn.WriteError(errors.New("ERR wrong number of arguments for 'set' command"))
+				} else {
+					server.mu.Lock()
+					server.kvs[values[1].String()] = values[2]
+					server.mu.Unlock()
+					conn.WriteSimpleString("OK")
+				}
+				continue
+			case "get":
+				if len(values) != 2 {
+					conn.WriteError(errors.New("ERR wrong number of arguments for 'get' command"))
+				} else {
+					server.mu.RLock()
+					s, ok := server.kvs[values[1].String()]
+					server.mu.RUnlock()
+					if !ok {
+						conn.WriteNull()
+					} else {
+						conn.WriteString(s.String())
+					}
+				}
+				continue
 			}
 		}
-
-		buf.Reset()
 	}
 }
 
 func main() {
-
+	server := NewServer()
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
@@ -68,7 +116,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		go handleConnection(conn)
+		go server.HandleConnection(NewConnection(conn))
 	}
 
 }
