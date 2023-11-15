@@ -28,12 +28,13 @@ func handleConnection(conn net.Conn) {
 
 		fmt.Println("Input: ", input)
 		if strings.EqualFold(input, "PING\r\n") {
-			_, err = conn.Write([]byte("+PONG\r\n"))
+			response := "+PONG\r\n"
+			_, err = conn.Write([]byte(response))
 			if err != nil {
 				fmt.Println("Error writing data: ", err)
 				os.Exit(1)
 			}
-
+			fmt.Println("Response: ", response)
 		} else {
 			fmt.Println("Unknown command: ", input)
 		}
