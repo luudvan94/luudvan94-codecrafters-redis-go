@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
+	"strings"
 
 	// Uncomment this block to pass the first stage
 	"net"
@@ -9,12 +12,31 @@ import (
 )
 
 func handleConnection(conn net.Conn) {
-	fmt.Println("here")
 	defer conn.Close()
 
+	reader := bufio.NewReader(conn)
 	for {
-		conn.Write([]byte("+PONG\r\n"))
-		return
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				fmt.Println("Connection failed: ", err)
+				break
+			}
+			fmt.Println("Error reading data")
+			os.Exit(1)
+		}
+
+		fmt.Println("Input: ", input)
+		if strings.EqualFold(input, "PING\r\n") {
+			_, err = conn.Write([]byte("+PONG\r\n"))
+			if err != nil {
+				fmt.Println("Error writing data: ", err)
+				os.Exit(1)
+			}
+
+		} else {
+			fmt.Println("Unknown command: ", input)
+		}
 	}
 }
 
