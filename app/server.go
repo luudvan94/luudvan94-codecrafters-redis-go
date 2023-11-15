@@ -28,22 +28,22 @@ func handleConnection(conn net.Conn) {
 			fmt.Println("Error reading data: ", err)
 			os.Exit(1)
 		}
-		fmt.Printf("Read %s\n", v.Type())
-		if v.Type() == resp.SimpleString {
-			switch v.String() {
+		fmt.Printf("Read %s %d\n", v.Type(), len(v.Array()))
+		if v.Type() == resp.Array && len(v.Array()) > 0 {
+			command := v.Array()[0]
+			fmt.Printf("%s\n", command.String())
+			switch command.String() {
+			case "ECHO":
+				if len(v.Array()) < 2 {
+					fmt.Println("Missing value argument: ", v.String())
+					os.Exit(1)
+				}
+
+				value := v.Array()[1]
+				conn.Write(value.Bytes())
 			case "PING":
 				wr.WriteSimpleString("PONG")
 				conn.Write(buf.Bytes())
-			default:
-				fmt.Printf("Unknown command: %s\n", v)
-			}
-		}
-		if v.Type() == resp.Array && len(v.Array()) >= 2 {
-			command := v.Array()[0]
-			value := v.Array()[1]
-			switch command.String() {
-			case "ECHO":
-				conn.Write(value.Bytes())
 			}
 		}
 	}
