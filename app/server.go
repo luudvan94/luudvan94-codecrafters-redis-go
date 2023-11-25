@@ -81,7 +81,7 @@ func (server *Server) parseDB() {
 		fileName = "dumb.rdb"
 	}
 
-	filePath := strings.Join([]string{dir, fileName}, "")
+	filePath := strings.Join([]string{dir, fileName}, "/")
 
 	rdbFile, err := os.Open(filePath)
 	if err != nil {
