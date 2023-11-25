@@ -30,7 +30,7 @@ type Server struct {
 
 type Value struct {
 	value  resp.Value
-	expire time.Time
+	expire *time.Time
 }
 
 func NewServer(dbConfig map[string]string) *Server {
@@ -96,7 +96,7 @@ func (server *Server) parseDB() {
 		switch o.GetType() {
 		case parser.StringType:
 			str := o.(*parser.StringObject)
-			server.kvs[str.Key] = Value{value: resp.StringValue(string(str.Value))}
+			server.kvs[str.Key] = Value{value: resp.StringValue(string(str.Value)), expire: str.Expiration}
 		}
 		// return true to continue, return false to stop the iteration
 		return true
@@ -113,7 +113,8 @@ func (server *Server) set(args []resp.Value) {
 
 	if len(args) >= 5 && args[3].String() == "px" {
 		expiryAmount := args[4].Integer()
-		newValue.expire = time.Now().Add(time.Duration(expiryAmount) * time.Millisecond)
+		newTime := time.Now().Add(time.Duration(expiryAmount) * time.Millisecond)
+		newValue.expire = &newTime
 		fmt.Printf("Expiration time: %s\n", newValue.expire.String())
 	}
 	server.mu.Lock()
