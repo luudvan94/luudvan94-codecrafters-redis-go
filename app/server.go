@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/hdt3213/rdb/parser"
 	"github.com/tidwall/resp"
 )
 
@@ -32,8 +33,11 @@ type Value struct {
 	expire time.Time
 }
 
-func NewServer() *Server {
-	return &Server{kvs: make(map[string]Value)}
+func NewServer(dbConfig map[string]string) *Server {
+	server := &Server{kvs: make(map[string]Value)}
+	server.dbConfig = dbConfig
+	server.parseDB()
+	return server
 }
 
 func NewConnection(conn net.Conn) *Connection {
@@ -62,6 +66,44 @@ func (server *Server) get(key string) (Value, bool) {
 	}
 
 	return value, ok
+}
+
+func (server *Server) parseDB() {
+	dir, exist := server.dbConfig["dir"]
+	if !exist {
+		fmt.Println("Can not found db directory")
+		os.Exit(1)
+	}
+
+	fileName, exist := server.dbConfig["dbfilename"]
+	if !exist {
+		fmt.Println("Can not found db file name")
+		os.Exit(1)
+	}
+
+	filePath := strings.Join([]string{dir, fileName}, "")
+
+	rdbFile, err := os.Open(filePath)
+	if err != nil {
+		panic("open dump.rdb failed")
+	}
+	defer func() {
+		_ = rdbFile.Close()
+	}()
+	decoder := parser.NewDecoder(rdbFile)
+	err = decoder.Parse(func(o parser.RedisObject) bool {
+		switch o.GetType() {
+		case parser.StringType:
+			str := o.(*parser.StringObject)
+			server.kvs[str.Key] = Value{value: resp.StringValue(string(str.Value))}
+		}
+		// return true to continue, return false to stop the iteration
+		return true
+	})
+	if err != nil {
+		panic(err)
+	}
+
 }
 
 func (server *Server) set(args []resp.Value) {
@@ -142,6 +184,23 @@ func (server *Server) HandleConnection(conn *Connection) {
 					}
 				}
 				continue
+			case "keys":
+				if len(values) < 2 {
+					conn.WriteError(errors.New("ERR wrong number of arguments for 'keys' command"))
+				} else {
+					if values[1].String() == "*" {
+						var keys []resp.Value
+						for key := range server.kvs {
+							keys = append(keys, resp.StringValue(key))
+						}
+
+						conn.WriteArray(keys)
+					} else {
+						conn.WriteError(errors.New("ERR unsupported key for for 'keys' command"))
+					}
+
+				}
+				continue
 			}
 
 		}
@@ -169,8 +228,7 @@ func main() {
 		}
 	}
 
-	server := NewServer()
-	server.dbConfig = dbConfig
+	server := NewServer(dbConfig)
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
