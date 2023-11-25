@@ -22,8 +22,9 @@ type Connection struct {
 }
 
 type Server struct {
-	mu  sync.RWMutex
-	kvs map[string]Value
+	mu       sync.RWMutex
+	kvs      map[string]Value
+	dbConfig map[string]string
 }
 
 type Value struct {
@@ -124,13 +125,51 @@ func (server *Server) HandleConnection(conn *Connection) {
 					}
 				}
 				continue
+			case "config":
+				if len(values) < 3 {
+					conn.WriteError(errors.New("ERR wrong number of arguments for 'CONFIG' command"))
+				} else {
+					switch strings.ToLower(values[1].String()) {
+					case "get":
+						value, exist := server.dbConfig[values[2].String()]
+						if !exist {
+							conn.WriteError(fmt.Errorf("ERR can not found %s", values[2]))
+						} else {
+							conn.WriteString(value)
+						}
+						continue
+					}
+				}
+				continue
 			}
+
 		}
 	}
 }
 
+func GetArgumentName(original string) string {
+	prefix := "--"
+	if strings.HasPrefix(original, prefix) {
+		return original[len(prefix):]
+	}
+	return original
+}
+
 func main() {
+	dbConfig := map[string]string{}
+
+	for i, arg := range os.Args {
+		if arg == "--dir" {
+			fmt.Printf("--dir: %s\n", os.Args[i+1])
+			dbConfig[GetArgumentName(arg)] = os.Args[i+1]
+		} else if arg == "--dbfilename" {
+			fmt.Printf("--dbfilename: %s\n", os.Args[i+1])
+			dbConfig[GetArgumentName(arg)] = os.Args[i+1]
+		}
+	}
+
 	server := NewServer()
+	server.dbConfig = dbConfig
 	l, err := net.Listen("tcp", "0.0.0.0:6379")
 	if err != nil {
 		fmt.Println("Failed to bind to port 6379")
