@@ -85,7 +85,8 @@ func (server *Server) parseDB() {
 
 	rdbFile, err := os.Open(filePath)
 	if err != nil {
-		panic("open dump.rdb failed")
+		fmt.Printf("Can not found %s\n", filePath)
+		return
 	}
 	defer func() {
 		_ = rdbFile.Close()
