@@ -129,10 +129,10 @@ func (server *Server) HandleConnection(conn *Connection) {
 				if len(values) < 3 {
 					conn.WriteError(errors.New("ERR wrong number of arguments for 'CONFIG' command"))
 				} else {
-					key := values[1]
-					switch strings.ToLower(key.String()) {
+					switch strings.ToLower(values[1].String()) {
 					case "get":
-						value, exist := server.dbConfig[values[2].String()]
+						key := values[2]
+						value, exist := server.dbConfig[key.String()]
 						if !exist {
 							conn.WriteError(fmt.Errorf("ERR can not found %s", values[2]))
 						} else {
