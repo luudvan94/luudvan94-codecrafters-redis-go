@@ -72,13 +72,13 @@ func (server *Server) parseDB() {
 	dir, exist := server.dbConfig["dir"]
 	if !exist {
 		fmt.Println("Can not found db directory")
-		os.Exit(1)
+		dir = "./"
 	}
 
 	fileName, exist := server.dbConfig["dbfilename"]
 	if !exist {
 		fmt.Println("Can not found db file name")
-		os.Exit(1)
+		fileName = "dumb.rdb"
 	}
 
 	filePath := strings.Join([]string{dir, fileName}, "")
