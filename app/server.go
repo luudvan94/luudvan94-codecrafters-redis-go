@@ -197,7 +197,13 @@ func (server *Server) HandleConnection(conn *Connection) {
 
 						conn.WriteArray(keys)
 					} else {
-						conn.WriteError(errors.New("ERR unsupported key for for 'keys' command"))
+						value, exist := server.kvs[values[1].String()]
+						if !exist {
+							conn.WriteError(fmt.Errorf("can not found key %s", values[1].String()))
+						} else {
+							conn.WriteString(value.value.String())
+						}
+
 					}
 
 				}
